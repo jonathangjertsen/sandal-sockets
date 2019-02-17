@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Websocket client</title>
+<style>
+#page {
+    display: grid;
+    grid-template-columns: 400px auto;
+    grid-template-rows: 100px 100px auto;
+}
+#username-box, #message-box {
+    grid-column-start: 1;
+    padding: 20px;
+    margin-right: 20px;
+    margin-top: 10px;
+    box-shadow: 1px 1px 1px 1px;
+}
+#username-box {
+    grid-row-start: 1;
+    grid-row-end: 2;
+}
+#message-box {
+    grid-row-start: 2;
+    grid-row-end: 3;
+}
+ul#message-stream {
+    grid-column-start: 2;
+    grid-column-end: 3;
+    grid-row-start: 1;
+    grid-row-end: 4;
+    box-shadow: 1px 1px 1px 1px;
+    max-height: 400px;
+    overflow-y: scroll;
+}
+ul#message-stream li {
+    list-style: none;
+    width: 500px;
+    overflow-wrap: break-word;
+}
+ul#message-stream li:nth-of-type(2n+1) {
+    background-color: #f5f5f5;
+}
+ul#message-stream li:nth-of-type(2n) {
+    background-color: #fafafa;
+}
+</style>
+</head>
+<body>
+<div id='page'>
+    <div id='username-box'>
+        <label for='username-in'>Username:</label>
+        <input id='username-in'></input>
+        <button id='connect'>Connect</button>
+    </div>
+
+    <div id='message-box'>
+        <label for='message-in'>Message:</label>
+        <input id='message-in'></input>
+        <button id='message-send'>Send</button>
+    </div>
+
+    <ul id='message-stream'>
+        <li>Test message</li>
+    </ul>
+</div>
+
+<script>
+// Constants
+const HOST = '127.0.0.1';
+const PORT = '5678'
+const URL = `ws://${HOST}:${PORT}/`;
+
+// Objects
+const sock = {
+    io: undefined,
+    send: function(message, callback) {
+        if (sock.io) {
+            if (sock.io.readyState === 1) {
+                sock.io.send(message);
+                if (callback) {
+                    callback();
+                }
+            } else {
+                const waiter = window.setInterval(function() {
+                    if (sock.io.readyState === 1) {
+                        window.clearInterval(waiter);
+                        sock.io.send(message);
+                        if (callback) {
+                            callback();
+                        }
+                    }
+                }, 10);
+            }
+        }
+    }
+};
+const messages = document.getElementById('message-stream');
+const fields = {
+    username: document.getElementById('username-in'),
+    connect: document.getElementById('connect'),
+    message: document.getElementById('message-in'),
+    send: document.getElementById('message-send'),
+};
+fields.message.disabled = true;
+fields.send.disabled = true;
+
+function startSocket() {
+    sock.io = new WebSocket(URL);
+    sock.io.onmessage = function (event) {
+        const data = JSON.parse(event.data);
+        if ('what' in data && 'username' in data) {
+            let message = '';
+            if (data.what == 'connected') {
+                message = `<b>${data.username}</b> connected`;
+            } else if (data.what == 'new_message' && 'message' in data) {
+                message = `<b>${data.username}</b> says: ${data.message}`;
+            }
+
+            if (message) {
+                const messageElement = document.createElement('li');
+                messageElement.innerHTML = message;
+                messages.appendChild(messageElement);
+            }
+        }
+    };
+}
+
+// Interactivity
+fields.connect.onclick = function(event) {
+    fields.username.disabled = true;
+    fields.connect.disabled = true;
+
+    const username = fields.username.value;
+    startSocket();
+    sock.send(JSON.stringify({ username: username }));
+    
+    fields.message.disabled = false;
+    fields.send.disabled = false;
+}
+fields.send.onclick = function(event) {
+    const message = fields.message.value;
+
+    sock.send(JSON.stringify({ message: message }));
+};
+
+</script>
+</body>
+</html>
